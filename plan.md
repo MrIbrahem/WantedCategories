@@ -183,26 +183,26 @@ python remove_red_categories.py --dry-run
 - [x] Create plan.md
 
 ### Phase 2: Basic Structure
-- [ ] Create main Python script
-- [ ] Implement authentication
-- [ ] Create requirements.txt
-- [ ] Create .env.example
+- [x] Create main Python script
+- [x] Implement authentication
+- [x] Create requirements.txt
+- [x] Create .env.example
 
 ### Phase 3: Core Functionality
-- [ ] Implement wanted categories fetching
-- [ ] Implement category member retrieval
-- [ ] Implement category detection in text
-- [ ] Implement category removal logic
+- [x] Implement wanted categories fetching
+- [x] Implement category member retrieval
+- [x] Implement category detection in text
+- [x] Implement category removal logic
 
 ### Phase 4: Smart Features
-- [ ] Implement template detection (10-article rule)
-- [ ] Add error handling
-- [ ] Add logging
+- [x] Implement template detection (10-article rule)
+- [x] Add error handling
+- [x] Add logging
 
 ### Phase 5: Testing & Documentation
-- [ ] Test with sandbox
-- [ ] Update README
-- [ ] Add usage examples
+- [x] Test with sandbox
+- [x] Update README
+- [x] Add usage examples
 
 ## Notes
 
