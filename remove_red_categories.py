@@ -13,6 +13,7 @@ import os
 import sys
 import re
 import logging
+import itertools
 from typing import List, Optional, Tuple
 from dotenv import load_dotenv
 import mwclient
@@ -77,6 +78,7 @@ class RedCategoryRemover:
     def get_wanted_categories(self) -> List[str]:
         """
         Get list of wanted categories from Special:WantedCategories.
+        Uses pagination to fetch all wanted categories.
         
         Returns:
             List of category names (without 'Category:' prefix)
@@ -85,21 +87,33 @@ class RedCategoryRemover:
             logger.info("Fetching wanted categories...")
             wanted_cats = []
             
-            # Query wanted categories using the API
-            result = self.site.api('query', 
-                                  list='querycachedspecial',
-                                  qcslimit=500,
-                                  qcspage='Wantedcategories')
-            
-            if 'query' in result and 'querycachedspecial' in result['query']:
-                for item in result['query']['querycachedspecial']:
-                    # Extract category name without namespace prefix
-                    cat_title = item['title']
-                    if ':' in cat_title:
-                        cat_name = cat_title.split(':', 1)[1]
-                    else:
-                        cat_name = cat_title
-                    wanted_cats.append(cat_name)
+            # Query wanted categories using the API with pagination
+            continue_param = {}
+            while True:
+                params = {
+                    'list': 'querycachedspecial',
+                    'qcslimit': 500,
+                    'qcspage': 'Wantedcategories'
+                }
+                params.update(continue_param)
+                
+                result = self.site.api('query', **params)
+                
+                if 'query' in result and 'querycachedspecial' in result['query']:
+                    for item in result['query']['querycachedspecial']:
+                        # Extract category name without namespace prefix
+                        cat_title = item['title']
+                        if ':' in cat_title:
+                            cat_name = cat_title.split(':', 1)[1]
+                        else:
+                            cat_name = cat_title
+                        wanted_cats.append(cat_name)
+                
+                # Check for continuation
+                if 'continue' in result:
+                    continue_param = result['continue']
+                else:
+                    break
                     
             logger.info(f"Found {len(wanted_cats)} wanted categories")
             return wanted_cats
@@ -108,31 +122,35 @@ class RedCategoryRemover:
             logger.error(f"Failed to fetch wanted categories: {e}")
             return []
     
-    def get_category_members(self, category_name: str) -> List:
+    def get_category_members(self, category_name: str):
         """
-        Get all members of a category.
+        Get all members of a category as an iterator to avoid loading all members into memory.
         
         Args:
             category_name: Name of the category (without 'Category:' prefix)
             
         Returns:
-            List of page objects
+            Iterator of page objects
         """
         try:
             # Try with 'Category:' prefix
             category = self.site.categories[f'Category:{category_name}']
-            members = list(category.members())
+            members = category.members()
             
-            # Also try with local namespace (e.g., 'تصنيف:' for Arabic)
-            if not members:
+            # Check if we got any members, if not try with local namespace
+            try:
+                # Peek at first member to check if iterator has items
+                first_member = next(members)
+                # If successful, return an iterator that includes the first member
+                return itertools.chain([first_member], members)
+            except StopIteration:
+                # No members with 'Category:' prefix, try local namespace
                 category = self.site.categories[category_name]
-                members = list(category.members())
-                
-            return members
+                return category.members()
             
         except Exception as e:
             logger.error(f"Failed to get members of category '{category_name}': {e}")
-            return []
+            return iter([])  # Return empty iterator
     
     def check_category_in_text(self, text: str, category_name: str) -> bool:
         """
@@ -205,26 +223,24 @@ class RedCategoryRemover:
         logger.info(f"Processing category: {category_name}")
         logger.info(f"{'='*60}")
         
-        # Get category members
+        # Get category members as an iterator
         members = self.get_category_members(category_name)
         
-        if not members:
-            logger.info(f"No members found for category '{category_name}'")
-            return 0, False
-            
-        logger.info(f"Found {len(members)} members")
+        logger.info(f"Fetching category members...")
         
         edits_made = 0
         not_found_count = 0
+        articles_checked = 0
         
-        for i, page in enumerate(members, 1):
+        for page in members:
             try:
                 # Skip non-main namespace pages for safety (only process articles)
                 if page.namespace != 0:
                     logger.debug(f"Skipping non-article page: {page.name}")
                     continue
-                    
-                logger.info(f"[{i}/{len(members)}] Checking: {page.name}")
+                
+                articles_checked += 1
+                logger.info(f"[Article {articles_checked}] Checking: {page.name}")
                 
                 # Get page content
                 text = page.text()
@@ -239,13 +255,18 @@ class RedCategoryRemover:
                     if new_text != text:
                         if self.dry_run:
                             logger.info(f"  → [DRY RUN] Would remove category from: {page.name}")
+                            edits_made += 1
                         else:
-                            # Save the page
-                            edit_summary = f"Removing non-existent category: [[Category:{category_name}]]"
-                            page.save(new_text, summary=edit_summary, minor=True)
-                            logger.info(f"  → Category removed successfully")
-                            
-                        edits_made += 1
+                            # Save the page with error handling
+                            try:
+                                edit_summary = f"Removing non-existent category: [[Category:{category_name}]]"
+                                page.save(new_text, summary=edit_summary, minor=True)
+                                logger.info(f"  → Category removed successfully")
+                                edits_made += 1
+                            except Exception as save_error:
+                                logger.error(f"  → Failed to save page: {save_error}")
+                                # Continue processing other pages
+                        
                         not_found_count = 0  # Reset counter on successful find
                     else:
                         logger.warning(f"  → Text unchanged after removal attempt")
