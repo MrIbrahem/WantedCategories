@@ -120,6 +120,9 @@ class TestCategoryRemoval(unittest.TestCase):
 class TestTemplateDetection(unittest.TestCase):
     """Tests for template detection (10-article rule)."""
     
+    # Constants for mock data
+    MOCK_TEXT_NO_CATEGORY = "No category here"
+    
     def setUp(self):
         """Set up test fixtures."""
         self.remover = RedCategoryRemover(
@@ -158,7 +161,7 @@ class TestTemplateDetection(unittest.TestCase):
             page = Mock()
             page.namespace = 0
             page.name = f"Article {i}"
-            page.text.return_value = "No category here"
+            page.text.return_value = self.MOCK_TEXT_NO_CATEGORY
             mock_pages.append(page)
         
         mock_get_members.return_value = iter(mock_pages)
@@ -180,7 +183,7 @@ class TestTemplateDetection(unittest.TestCase):
             page = Mock()
             page.namespace = 0
             page.name = f"Article {i}"
-            page.text.return_value = "No category here"
+            page.text.return_value = self.MOCK_TEXT_NO_CATEGORY
             mock_pages.append(page)
         
         # One with category
@@ -196,7 +199,7 @@ class TestTemplateDetection(unittest.TestCase):
             page = Mock()
             page.namespace = 0
             page.name = f"Article {i + 6}"
-            page.text.return_value = "No category here"
+            page.text.return_value = self.MOCK_TEXT_NO_CATEGORY
             mock_pages.append(page)
         
         mock_get_members.return_value = iter(mock_pages)
